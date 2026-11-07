@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111827">
+<title>Список дежурных</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{color-scheme:dark;--bg:#0b1020;--panel:#151d30;--line:#29344b;--muted:#9aa8bf;--text:#f3f6fc;--accent:#8b5cf6;--green:#22c55e;--red:#f87171}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;padding:26px 14px;background:radial-gradient(ellipse at top,#20284a 0%,var(--bg) 58%);color:var(--text);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+main{width:min(100%,760px);margin:auto}h1{margin:0 0 5px;font-size:clamp(27px,5vw,36px);letter-spacing:-.04em}.sub{margin:0;color:var(--muted)}
+.card{background:rgba(21,29,48,.96);border:1px solid var(--line);border-radius:19px;padding:18px;margin-top:17px;box-shadow:0 18px 55px #0004}
+.status{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:30px;padding:5px 10px;font-size:12px;color:var(--muted)}.dot{width:8px;height:8px;border-radius:50%;background:#f59e0b}.status.online .dot{background:var(--green)}.status.error .dot{background:var(--red)}
+.topline{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.stats{display:flex;justify-content:space-between;gap:10px;margin:16px 0 10px;flex-wrap:wrap}.round{color:var(--muted);font-size:14px}.track{height:9px;background:#303b52;border-radius:99px;overflow:hidden}.bar{height:100%;width:0;background:linear-gradient(90deg,#8b5cf6,#22c55e);transition:width .2s}
+.tabs{display:flex;gap:8px;margin-top:17px}.tab{flex:1}.tab.active{background:var(--accent);border-color:var(--accent)}
+button{border:1px solid var(--line);border-radius:11px;padding:10px 13px;background:#202b42;color:var(--text);font:inherit;cursor:pointer}button:hover{filter:brightness(1.14)}button:disabled{opacity:.5;cursor:wait}
+input[type=search],input[type=text],input[type=password]{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:11px;background:#0d1425;color:var(--text);font:inherit;outline:none}input:focus{border-color:var(--accent)}
+.toolbar{display:flex;gap:9px;margin:14px 0}.toolbar input{flex:1;min-width:0}
+ul{list-style:none;margin:0;padding:0}li{border-top:1px solid var(--line)}.person{display:flex;align-items:center;gap:12px;padding:11px 4px;min-height:48px;cursor:pointer}.person input{width:20px;height:20px;accent-color:var(--green);cursor:pointer}.num{width:24px;text-align:right;color:#77849b;font-size:13px}.name{flex:1}.done .name{color:#8491a8;text-decoration:line-through;text-decoration-thickness:2px}
+.notice{display:none;margin:14px 0 0;padding:11px 13px;border:1px solid #28794a;background:#123322;color:#b9f6ce;border-radius:11px}.notice.show{display:block}
+.empty{padding:20px 4px;text-align:center;color:var(--muted)}.muted{color:var(--muted)}.small{font-size:12px}.history-item{padding:12px 3px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:flex-start}.history-icon{font-size:19px}.history-main{flex:1;min-width:0}.history-date{color:var(--muted);font-size:12px;margin-top:3px}.history-round{font-size:12px;color:#c4b5fd}
+.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}.danger{border-color:#713b49;color:#fecaca}.hidden{display:none!important}
+.config-grid{display:grid;gap:10px}.field label{display:block;font-size:13px;color:var(--muted);margin:0 0 5px}.hint{font-size:12px;color:var(--muted);line-height:1.5}.errorbox{color:#fecaca;background:#3a1d2a;border:1px solid #713b49;border-radius:10px;padding:10px;margin-top:10px;white-space:pre-wrap;font-size:13px}
+footer{margin:14px 3px;color:var(--muted);font-size:12px}
+@media(max-width:480px){body{padding:18px 10px}.card{padding:14px}.toolbar{flex-wrap:wrap}.toolbar button{width:100%}}
+</style>
+</head>
+<body>
+<main>
+<header>
+ <div class="topline"><div><h1>Список дежурных</h1><p class="sub">Общий список группы с историей отметок</p></div><span class="status" id="status"><i class="dot"></i><span id="statusText">Не подключено</span></span></div>
+</header>
+
+<section class="card" id="mainCard">
+ <div class="stats"><strong id="count">Отмечено: —</strong><span class="round" id="round">Круг № —</span></div>
+ <div class="track"><div class="bar" id="bar"></div></div>
+ <div class="notice" id="notice"></div>
+ <div class="tabs">
+  <button class="tab active" id="listTab">Дежурные</button>
+  <button class="tab" id="historyTab">История</button>
+ </div>
+ <section id="listView">
+  <div class="toolbar"><input id="search" type="search" placeholder="Найти дежурного..."><button id="resetBtn" class="danger">Сбросить круг</button></div>
+  <ul id="people"></ul><p class="empty hidden" id="empty">Ничего не найдено.</p>
+ </section>
+ <section id="historyView" class="hidden">
+  <div class="topline" style="margin:14px 0"><strong>История отметок</strong><span class="muted small" id="historyCount"></span></div>
+  <div id="historyList"></div><p class="empty hidden" id="historyEmpty">История пока пустая.</p>
+ </section>
+ <div id="error" class="errorbox hidden"></div>
+</section>
+
+<section class="card">
+ <div class="topline"><strong>Подключение общей базы</strong><button id="configToggle">Настроить</button></div>
+ <div id="configPanel" class="hidden" style="margin-top:14px">
+  <p class="hint">Вставь Project URL и anon/public key из Supabase → Project Settings → API. Для GitHub Pages лучше вписать их в файл перед публикацией (инструкция в README). Здесь настройки сохраняются только в этом браузере.</p>
+  <div class="config-grid">
+   <div class="field"><label for="urlInput">Project URL</label><input id="urlInput" type="text" placeholder="https://xxxx.supabase.co"></div>
+   <div class="field"><label for="keyInput">anon / publishable key</label><input id="keyInput" type="password" placeholder="sb_publishable_... или legacy anon key"></div>
+   <div class="actions"><button id="connectBtn">Подключиться</button><button id="disconnectBtn" class="danger">Отключить</button></div>
+  </div>
+ </div>
+</section>
+<footer>Отметки и история общие для всех, кто открыл этот сайт с подключённой базой. Не публикуйте service_role key — используется только публичный anon/publishable key с ограничениями RLS.</footer>
+</main>
+
+<script>
+(() => {
+const PEOPLE = [
+"Бег Самира Рустамовна","Биккулов Тимур Димович","Горбунова Екатерина Алексеевна",
+"Гордиенко Яна Артуровна","Дерунов Богдан Вячеславович","Дзюба Ярослав Борисович",
+"Дмитрова Алина","Захаров Артём Алексеевич","Калмыков Павел Вячеславович",
+"Каменцев Иван Вячеславович","Корнеева Екатерина Евгеньевна","Наумова Анастасия Андреевна",
+"Пацюкова Анастасия Александровна","Писаренко Ярослав Денисович","Рыбалко Дарья Михайловна",
+"Рыжих Захар Николаевич","Симоненко Мария Максимовна","Слаутин Матвей Артемович",
+"Соломахин Олег Владимирович","Троян Анна Максимовна","Фильчукова Анастасия Алексеевна",
+"Шалама́гин Арсений Алексеевич","Шатова Наталья Сергеевна","Шестаков Никита Сергеевич"
+];
+// Можно заранее вписать настройки сюда перед публикацией. Не вставляйте service_role key.
+const SUPABASE_URL = "";
+const SUPABASE_ANON_KEY = "";
+const $ = id => document.getElementById(id);
+let client = null, state = {checked_names:[], round:1}, historyRows = [], channel = null, busy = false;
+
+function setStatus(kind,text){$("status").className="status "+(kind||"");$("statusText").textContent=text}
+function showError(message){$("error").textContent=message;$("error").classList.remove("hidden")}
+function clearError(){$("error").textContent="";$("error").classList.add("hidden")}
+function localConfig(){try{return JSON.parse(localStorage.getItem("duty-supabase-config")||"{}")}catch{return {}}}
+function saveConfig(url,key){localStorage.setItem("duty-supabase-config",JSON.stringify({url,key}))}
+function configValues(){const saved=localConfig();return {url:$("urlInput").value.trim()||SUPABASE_URL||saved.url||"",key:$("keyInput").value.trim()||SUPABASE_ANON_KEY||saved.key||""}}
+
+function renderPeople(){
+ const query=$("search").value.trim().toLocaleLowerCase("ru"), ul=$("people");ul.innerHTML="";
+ PEOPLE.filter(n=>n.toLocaleLowerCase("ru").includes(query)).forEach(name=>{
+  const li=document.createElement("li");const done=state.checked_names.includes(name);if(done)li.className="done";
+  const label=document.createElement("label");label.className="person";
+  const cb=document.createElement("input");cb.type="checkbox";cb.checked=done;cb.disabled=busy;cb.setAttribute("aria-label","Отметить "+name);
+  cb.addEventListener("change",()=>togglePerson(name,cb.checked));
+  const num=document.createElement("span");num.className="num";num.textContent=(PEOPLE.indexOf(name)+1)+".";
+  const span=document.createElement("span");span.className="name";span.textContent=name;
+  label.append(cb,num,span);li.append(label);ul.append(li);
+ });
+ $("empty").classList.toggle("hidden",ul.children.length!==0);
+ $("count").textContent=`Отмечено: ${state.checked_names.length} из ${PEOPLE.length}`;
+ $("round").textContent=`Круг № ${state.round}`;
+ $("bar").style.width=(state.checked_names.length/PEOPLE.length*100)+"%";
+}
+function renderHistory(){
+ const root=$("historyList");root.innerHTML="";$("historyCount").textContent=historyRows.length+" записей";
+ $("historyEmpty").classList.toggle("hidden",historyRows.length!==0);
+ historyRows.forEach(row=>{
+  const item=document.createElement("div");item.className="history-item";
+  const icon=document.createElement("div");icon.className="history-icon";icon.textContent=row.action==="checked"?"☑️":row.action==="unchecked"?"↩️":"🔄";
+  const main=document.createElement("div");main.className="history-main";
+  const title=document.createElement("div");
+  title.textContent=row.action==="round_completed"?`Завершён круг № ${row.round_number}. Начат новый круг.`:`${row.person_name} — ${row.action==="checked"?"отмечен(а) как дежуривший(ая)":"отметка снята"}`;
+  const date=document.createElement("div");date.className="history-date";date.textContent=new Date(row.created_at).toLocaleString("ru-RU",{dateStyle:"medium",timeStyle:"short"});
+  const round=document.createElement("div");round.className="history-round";round.textContent=`Круг № ${row.round_number}`;
+  main.append(title,date,round);item.append(icon,main);root.append(item);
+ });
+}
+function render(){renderPeople();renderHistory()}
+async function loadData(){
+ if(!client)return;
+ const [s,h]=await Promise.all([
+  client.from("duty_state").select("checked_names, round_number").eq("id",1).single(),
+  client.from("duty_history").select("id,person_name,action,round_number,created_at").order("created_at",{ascending:false}).limit(500)
+ ]);
+ if(s.error)throw new Error("Не удалось загрузить состояние: "+s.error.message);
+ if(h.error)throw new Error("Не удалось загрузить историю: "+h.error.message);
+ state={checked_names:Array.isArray(s.data.checked_names)?s.data.checked_names:[],round:s.data.round_number||1};
+ historyRows=h.data||[];render();
+}
+function subscribe(){
+ if(channel)client.removeChannel(channel);
+ channel=client.channel("duty-list-live")
+  .on("postgres_changes",{event:"*",schema:"public",table:"duty_state"},()=>loadData().catch(e=>showError(e.message)))
+  .on("postgres_changes",{event:"INSERT",schema:"public",table:"duty_history"},()=>loadData().catch(e=>showError(e.message)))
+  .subscribe(status=>{if(status==="SUBSCRIBED")setStatus("online","Синхронизация активна");else if(status==="CHANNEL_ERROR")setStatus("error","Ошибка синхронизации")});
+}
+async function connect(url,key){
+ clearError();
+ if(!window.supabase){throw new Error("Не загрузилась библиотека Supabase. Проверьте подключение к интернету и обновите страницу.")}
+ if(!url||!key)throw new Error("Нужно указать Project URL и anon/publishable key.");
+ if(client){if(channel)await client.removeChannel(channel);client=null;channel=null;}
+ client=window.supabase.createClient(url,key);
+ setStatus("","Подключение...");
+ try{await loadData();subscribe();setStatus("online","Синхронизация активна");}
+ catch(e){client=null;setStatus("error","Не подключено");throw e;}
+}
+async function togglePerson(name,checked){
+ if(!client){showError("Сначала подключите Supabase в блоке «Настроить».");renderPeople();return}
+ if(busy)return;busy=true;clearError();renderPeople();
+ try{
+  const {data,error}=await client.rpc("toggle_duty",{p_person_name:name,p_checked:checked});
+  if(error)throw error;
+  if(data&&data.error)throw new Error(data.error);
+  await loadData();
+  if(data&&data.round_completed){$("notice").textContent="Все дежурные отмечены! Начался новый круг № "+data.new_round_number+"."; $("notice").classList.add("show");setTimeout(()=>$("notice").classList.remove("show"),5000);}
+ }catch(e){showError("Не удалось сохранить отметку: "+e.message);await loadData().catch(()=>{});}
+ finally{busy=false;renderPeople()}
+}
+$("connectBtn").addEventListener("click",async()=>{
+ const {url,key}=configValues();$("connectBtn").disabled=true;
+ try{await connect(url,key);saveConfig(url,key);$("configPanel").classList.add("hidden");$("configToggle").textContent="Настроить";}
+ catch(e){showError(e.message)}
+ finally{$("connectBtn").disabled=false}
+});
+$("disconnectBtn").addEventListener("click",async()=>{
+ if(client&&channel)await client.removeChannel(channel);client=null;channel=null;localStorage.removeItem("duty-supabase-config");
+ state={checked_names:[],round:1};historyRows=[];render();setStatus("","Не подключено");clearError();
+});
+$("configToggle").addEventListener("click",()=>{$("configPanel").classList.toggle("hidden");$("configToggle").textContent=$("configPanel").classList.contains("hidden")?"Настроить":"Скрыть"});
+$("search").addEventListener("input",renderPeople);
+$("listTab").addEventListener("click",()=>{$("listView").classList.remove("hidden");$("historyView").classList.add("hidden");$("listTab").classList.add("active");$("historyTab").classList.remove("active")});
+$("historyTab").addEventListener("click",()=>{$("historyView").classList.remove("hidden");$("listView").classList.add("hidden");$("historyTab").classList.add("active");$("listTab").classList.remove("active")});
+$("resetBtn").addEventListener("click",async()=>{
+ if(!client){showError("Сначала подключите Supabase.");return}
+ if(!confirm("Сбросить отметки текущего круга? История останется без изменений."))return;
+ try{const {error}=await client.rpc("reset_duty_round");if(error)throw error;await loadData();clearError();}
+ catch(e){showError("Не удалось сбросить круг: "+e.message)}
+});
+const saved=localConfig();$("urlInput").value=SUPABASE_URL||saved.url||"";$("keyInput").value=SUPABASE_ANON_KEY||saved.key||"";
+render();
+if(SUPABASE_URL&&SUPABASE_ANON_KEY)connect(SUPABASE_URL,SUPABASE_ANON_KEY).catch(e=>showError(e.message));
+else if(saved.url&&saved.key)connect(saved.url,saved.key).catch(e=>showError(e.message));
+})();
+</script>
+</body>
+</html>
